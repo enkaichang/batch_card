@@ -10,6 +10,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
+  <!-- Material Symbols -->
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
   <!-- html2canvas -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <!-- JSZip -->
@@ -200,7 +202,7 @@
         id: '1',
         title: '網站故事',
         content: '社會學大師涂爾幹說：宗教不只是拜神，而是人類把東西分成「神聖」和「世俗」的過程。宗教其實是一種把人們緊緊綁在一起的道德共同體。我們之所以參加儀式，實際上是為了確認彼此是一家人。',
-        image: '/static/images/together.jpg',
+        image: '/batch_card/static/images/together.jpg',
         imageName: '預設插圖'
       }
     ];
@@ -482,7 +484,7 @@
           {/* 導覽列 */}
           <header className="bg-[var(--Card-Bg)] border-b border-[var(--Card-Border)] px-6 py-4 flex flex-wrap justify-between items-center gap-4">
             <div className="flex items-center gap-3">
-              <span className="bg-[var(--Primary)] text-[var(--on-primary)] font-bold p-2 rounded-lg text-lg">🎴</span>
+              <span className="bg-[var(--Primary)] text-[var(--on-primary)] font-bold p-2 rounded-lg text-lg flex items-center justify-center"><span className="material-symbols-outlined">style</span></span>
               <div>
                 <h1 className="text-xl font-bold tracking-wider text-[var(--Text)]">BatchCard 批次卡片產生器</h1>
               </div>
@@ -497,7 +499,7 @@
               
               {/* 品牌與版面設定 */}
               <div className="card space-y-4">
-                <h2 className="text-md font-bold text-[var(--Text)] border-b border-[var(--Card-Border)] pb-2 mb-3">🎨 品牌與全局設定</h2>
+                <h2 className="text-md font-bold text-[var(--Text)] border-b border-[var(--Card-Border)] pb-2 mb-3 flex items-center gap-2"><span className="material-symbols-outlined" style={{fontSize: '20px'}}>palette</span> 品牌與全局設定</h2>
                 
                 <div className="grid grid-cols-2 gap-4">
                   {/* 背景色 */}
@@ -550,12 +552,12 @@
               {/* 卡片清單管理 */}
               <div className="card flex-1 flex flex-col min-h-[300px]">
                 <div className="flex justify-between items-center border-b border-[var(--Card-Border)] pb-2 mb-3">
-                  <h2 className="text-md font-bold text-[var(--Text)]">🗂️ 卡片清單 ({cards.length})</h2>
+                  <h2 className="text-md font-bold text-[var(--Text)] flex items-center gap-2"><span className="material-symbols-outlined" style={{fontSize: '20px'}}>folder_open</span> 卡片清單 ({cards.length})</h2>
                   <button 
                     onClick={handleAddCard}
                     className="btn btn-primary btn-sm"
                   >
-                    ➕ 新增卡片
+                    <span className="material-symbols-outlined" style={{fontSize: '16px'}}>add</span> 新增卡片
                   </button>
                 </div>
 
@@ -589,14 +591,14 @@
                             title="複製此張卡片"
                             className="p-1 text-[var(--Text-Muted)] hover:text-white transition-colors"
                           >
-                            📋
+                            <span className="material-symbols-outlined" style={{fontSize: '18px'}}>content_copy</span>
                           </button>
                           <button 
                             onClick={(e) => handleDeleteCard(card.id, e)}
                             title="刪除此張卡片"
                             className="p-1 text-red-400 hover:text-red-300 transition-colors"
                           >
-                            🗑️
+                            <span className="material-symbols-outlined" style={{fontSize: '18px'}}>delete</span>
                           </button>
                         </div>
                       </div>
@@ -608,7 +610,7 @@
               {/* 編輯目前卡片內容 */}
               {activeCard && (
                 <div className="card space-y-4">
-                  <h2 className="text-md font-bold text-[var(--Text)] border-b border-[var(--Card-Border)] pb-2 mb-3">✏️ 編輯選定卡片</h2>
+                  <h2 className="text-md font-bold text-[var(--Text)] border-b border-[var(--Card-Border)] pb-2 mb-3 flex items-center gap-2"><span className="material-symbols-outlined" style={{fontSize: '20px'}}>edit</span> 編輯選定卡片</h2>
                   
                   {/* 標題 */}
                   <div className="form-group mb-0">
@@ -633,7 +635,7 @@
                       className="form-input form-input-sm resize-none leading-relaxed"
                     />
                     <div className="flex justify-between items-center mt-1">
-                      <span className="text-[10px] text-yellow-500/80">💡 提示：使用純 CSS 邊框畫斜角，轉檔導出完全不怕掉失！</span>
+                      <span className="text-[10px] text-yellow-500/80 flex items-center gap-1"><span className="material-symbols-outlined" style={{fontSize: '14px'}}>lightbulb</span> 提示：使用純 CSS 邊框畫斜角，轉檔導出完全不怕掉失！</span>
                       <span className="text-xs text-[var(--Text-Muted)] font-mono">目前字數: {activeCard.content?.length || 0}</span>
                     </div>
                   </div>
@@ -647,7 +649,7 @@
                         <p className="text-xs text-[var(--Text-Muted)] truncate font-mono mb-1">{activeCard.imageName || '網路圖片'}</p>
                         <div className="flex gap-2">
                           <label className="btn btn-secondary btn-sm cursor-pointer">
-                            📷 上傳本地圖片
+                            <span className="material-symbols-outlined" style={{fontSize: '16px'}}>photo_camera</span> 上傳本地圖片
                             <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'card-image')} className="hidden" />
                           </label>
                           <button 
@@ -660,7 +662,7 @@
                             }}
                             className="btn btn-secondary btn-sm"
                           >
-                            🔗 輸入網址
+                            <span className="material-symbols-outlined" style={{fontSize: '16px'}}>link</span> 輸入網址
                           </button>
                         </div>
                       </div>
@@ -674,7 +676,7 @@
             <section className="lg:col-span-7 flex flex-col justify-between items-center card card-lg bg-slate-950/60">
               
               <div className="w-full mb-4 flex justify-between items-center">
-                <span className="text-sm font-semibold text-slate-400">👀 即時預覽效果 (向量與 CSS 邊框完美同步)</span>
+                <span className="text-sm font-semibold text-slate-400 flex items-center gap-1"><span className="material-symbols-outlined" style={{fontSize: '18px'}}>visibility</span> 即時預覽效果 (向量與 CSS 邊框完美同步)</span>
                 <span className="text-xs bg-blue-900/40 text-blue-300 border border-blue-800/50 px-2.5 py-1 rounded-full font-mono">
                   輸出解析度: 1600 × {aspectRatio === '4-5' ? '2000' : '1600'}
                 </span>
@@ -756,14 +758,14 @@
                     disabled={isGenerating}
                     className={`btn btn-secondary ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    💾 下載目前單張 PNG
+                    <span className="material-symbols-outlined" style={{fontSize: '18px'}}>save</span> 下載目前單張 PNG
                   </button>
                   <button
                     onClick={handleExportAll}
                     disabled={isGenerating}
                     className={`btn btn-primary ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    ⚡ 一鍵打包全部卡片 (ZIP)
+                    <span className="material-symbols-outlined" style={{fontSize: '18px'}}>bolt</span> 一鍵打包全部卡片 (ZIP)
                   </button>
                 </div>
               </div>
