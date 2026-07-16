@@ -1,0 +1,781 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BatchCard - 批次社群卡片產生器</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&family=Noto+Serif+TC:wght@600;900&display=swap" rel="stylesheet">
+  <!-- html2canvas -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <!-- JSZip -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- React & Babel -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <style>
+    :root {
+      --Primary: #81B2D1;
+      --Secondary: #94a3b8;
+      --Background: #0f172a;
+      --Text: #f1f5f9;
+      --Text-Muted: #94a3b8;
+      --Accent: #1e293b;
+      --Card-Bg: #1e293b;
+      --Card-Border: rgba(255, 255, 255, 0.05);
+      --Input-Border: #334155;
+      --on-primary: #0f172a;
+      --Scrollbar-Track: #0f172a;
+      --Scrollbar-Thumb: #475569;
+      --Primary-10: rgba(129, 178, 209, 0.10);
+      --Primary-20: rgba(129, 178, 209, 0.20);
+      --Primary-30: rgba(129, 178, 209, 0.30);
+    }
+
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: var(--Background);
+      color: var(--Text);
+    }
+    .font-serif-tc {
+      font-family: 'Noto Serif TC', serif;
+    }
+    /* 隱藏滾動條但保持滾動 */
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+
+    /* Custom scrollbar for other scrollable areas */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--Scrollbar-Track);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--Scrollbar-Thumb);
+      border-radius: 10px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--Secondary);
+    }
+
+    /* ==================== Card ==================== */
+    .card {
+      background: var(--Card-Bg);
+      border-radius: 24px;
+      overflow: visible;
+      transition: all 0.3s ease-out;
+      border: 1px solid var(--Card-Border);
+      padding: 1.5rem;
+    }
+    .card:hover {
+      border-color: var(--Primary);
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+    }
+    .card-lg {
+      padding: 2rem;
+      border-radius: 32px;
+    }
+
+    /* ==================== Buttons ==================== */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0.75rem 2rem;
+      border-radius: 999px;
+      font-weight: 600;
+      font-size: 0.875rem;
+      transition: all 0.3s ease;
+      cursor: pointer;
+      text-decoration: none;
+      border: none;
+      gap: 0.5rem;
+    }
+    .btn-primary {
+      background-color: var(--Primary);
+      border: 1px solid var(--Primary);
+      color: var(--on-primary);
+      padding: 0.75rem 2rem;
+      border-radius: 999px;
+      transition: all 0.3s ease;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary:hover {
+      background-color: rgba(129, 178, 209, 0);
+      color: var(--Primary);
+    }
+    .btn-secondary {
+      border: 1px solid var(--Secondary);
+      background-color: var(--Secondary);
+      color: white;
+      padding: 0.75rem 2rem;
+      border-radius: 999px;
+      font-weight: 600;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    .btn-secondary:hover {
+      background-color: rgba(129, 178, 209, 0);
+      color: var(--Secondary);
+    }
+    .btn-red {
+      background-color: #E74C3C;
+      border: 1px solid #E74C3C;
+      color: white;
+      padding: 0.75rem 2rem;
+      border-radius: 999px;
+      transition: all 0.3s ease;
+      cursor: pointer;
+    }
+    .btn-red:hover {
+      background-color: rgba(129, 178, 209, 0);
+      color: #E74C3C;
+    }
+    .btn-sm {
+      padding: 0.375rem 1rem !important;
+      font-size: 0.75rem !important;
+    }
+
+    /* ==================== Form Styles ==================== */
+    .form-group {
+      margin-bottom: 1.5rem;
+    }
+    .form-label {
+      display: block;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--Primary);
+      opacity: 0.7;
+      margin-bottom: 0.5rem;
+      padding-left: 0.25rem;
+    }
+    .form-input {
+      width: 100%;
+      padding: 1rem;
+      font-size: 1rem;
+      border: 1px solid var(--Input-Border);
+      border-radius: 12px;
+      background-color: transparent;
+      color: var(--Text);
+      transition: all 0.2s ease;
+    }
+    .form-input:focus {
+      border-color: var(--Primary);
+      box-shadow: 0 0 0 3px rgba(129, 178, 209, 0.1);
+      outline: none;
+    }
+    .form-input-sm {
+      padding: 0.5rem 0.75rem !important;
+      font-size: 0.875rem !important;
+      border-radius: 8px !important;
+    }
+  </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen">
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+
+    const DEFAULT_CARDS = [
+      {
+        id: '1',
+        title: '網站故事',
+        content: '社會學大師涂爾幹說：宗教不只是拜神，而是人類把東西分成「神聖」和「世俗」的過程。宗教其實是一種把人們緊緊綁在一起的道德共同體。我們之所以參加儀式，實際上是為了確認彼此是一家人。',
+        image: '/static/images/together.jpg',
+        imageName: '預設插圖'
+      }
+    ];
+
+    // 預設 Logo (使用安全、穩定的 Base64 編碼，防止 html2canvas 渲染丟失)
+    const DEFAULT_LOGO = "https://mathematicunstoppableparty.pythonanywhere.com/static/logo.png";
+
+    function App() {
+      const [cards, setCards] = useState(DEFAULT_CARDS);
+      const [activeCardId, setActiveCardId] = useState('1');
+      const [logo, setLogo] = useState(DEFAULT_LOGO);
+      const [bgColor, setBgColor] = useState('#26394a'); // 完美還原 2.jpg 的深藍色
+      const [aspectRatio, setAspectRatio] = useState('4-5'); // 4:5 或 1:1
+      const [isGenerating, setIsGenerating] = useState(false);
+      const [progress, setProgress] = useState({ current: 0, total: 0 });
+
+      const activeCard = cards.find(c => c.id === activeCardId) || cards[0] || {};
+
+      const getImgSrcAndCors = (url) => {
+        if (!url) return '';
+        if (url.startsWith('data:') || url.startsWith('blob:')) {
+          return `src="${url}"`;
+        }
+        return `src="${url}" crossorigin="anonymous"`;
+      };
+
+      // 更新目前卡片的特定欄位
+      const updateActiveCard = (field, value) => {
+        setCards(prev => prev.map(card => {
+          if (card.id === activeCardId) {
+            return { ...card, [field]: value };
+          }
+          return card;
+        }));
+      };
+
+      // 新增卡片
+      const handleAddCard = () => {
+        const newId = Date.now().toString();
+        const newCard = {
+          id: newId,
+          title: '新卡片標題',
+          content: '請在這裡輸入卡片的內文說明，排版會自動適應高度並呈現美觀的文字行高與間距。',
+          image: 'https://images.unsplash.com/photo-1507842229512-238dd25936ce?auto=format&fit=crop&w=800&q=80',
+          imageName: '預設書本圖'
+        };
+        setCards(prev => [...prev, newCard]);
+        setActiveCardId(newId);
+      };
+
+      // 刪除卡片
+      const handleDeleteCard = (id, e) => {
+        e.stopPropagation();
+        if (cards.length <= 1) {
+          return;
+        }
+        const index = cards.findIndex(c => c.id === id);
+        const filtered = cards.filter(c => c.id !== id);
+        setCards(filtered);
+        if (activeCardId === id) {
+          const nextActive = filtered[index - 1] || filtered[0];
+          setActiveCardId(nextActive.id);
+        }
+      };
+
+      // 複製卡片
+      const handleDuplicateCard = (card, e) => {
+        e.stopPropagation();
+        const newCard = {
+          ...card,
+          id: Date.now().toString(),
+          title: card.title + ' (複本)'
+        };
+        setCards(prev => [...prev, newCard]);
+        setActiveCardId(newCard.id);
+      };
+
+      // 處理圖片上傳
+      const handleImageUpload = (e, target) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          if (target === 'logo') {
+            setLogo(event.target.result);
+          } else if (target === 'card-image') {
+            updateActiveCard('image', event.target.result);
+            updateActiveCard('imageName', file.name);
+          }
+        };
+        reader.readAsDataURL(file);
+      };
+
+
+
+
+      const renderCardToBlob = async (cardData) => {
+        return new Promise((resolve) => {
+          const tempContainer = document.createElement('div');
+          tempContainer.style.position = 'absolute';
+          tempContainer.style.left = '-9999px';
+          tempContainer.style.top = '-9999px';
+          document.body.appendChild(tempContainer);
+
+          const width = 800;
+          const height = aspectRatio === '4-5' ? 1000 : 800;
+
+          tempContainer.innerHTML = `
+            <div id="export-target" style="
+              width: ${width}px; 
+              height: ${height}px; 
+              background-color: ${bgColor}; 
+              display: flex; 
+              flex-direction: column; 
+              position: relative;
+              overflow: hidden;
+            ">
+              <!-- 上半部圖片 (佔 50%) -->
+              <div style="
+                height: 50%; 
+                width: 100%; 
+                overflow: hidden; 
+                position: relative;
+              ">
+                <img ${getImgSrcAndCors(cardData.image)} style="width: 100%; height: 100%; object-fit: cover;" />
+                
+                <!-- 【核心修正】純 CSS 邊框三角形斜切角遮罩（100% 支援 html2canvas，完美杜絕 SVG 丟失問題） -->
+                <div style="
+                  position: absolute;
+                  bottom: -1px;
+                  left: 0;
+                  width: 0;
+                  height: 0;
+                  border-style: solid;
+                  border-width: 0 0 55px ${width}px;
+                  border-color: transparent transparent ${bgColor} transparent;
+                  z-index: 10;
+                  pointer-events: none;
+                "></div>
+              </div>
+              
+              <!-- 下半部文字 -->
+              <div style="
+                height: 50%; 
+                padding: 48px 56px; 
+                display: flex; 
+                flex-direction: column; 
+                justify-content: flex-start;
+                box-sizing: border-box;
+                position: relative;
+              ">
+                <!-- 標題 (襯線體) -->
+                <h1 style="
+                  color: #ffffff; 
+                  font-family: 'Noto Serif TC', serif; 
+                  font-size: 54px; 
+                  font-weight: 900; 
+                  margin-bottom: 28px;
+                  line-height: 1.25;
+                  letter-spacing: 1px;
+                ">${cardData.title}</h1>
+                
+                <!-- 內文 (無襯線體) -->
+                <p style="
+                  color: rgba(255, 255, 255, 0.88); 
+                  font-family: 'Noto Sans TC', sans-serif; 
+                  font-size: 28px; 
+                  line-height: 1.65;
+                  font-weight: 300;
+                  text-align: justify;
+                ">${cardData.content}</p>
+              </div>
+
+              <!-- 左下角 Logo 浮水印 -->
+              <div style="
+                position: absolute; 
+                bottom: 28px; 
+                left: 28px; 
+                width: 72px; 
+                height: 72px;
+                border-radius: 50%;
+                overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+              ">
+                <img ${getImgSrcAndCors(logo)} style="width: 100%; height: 100%; object-fit: cover;" />
+              </div>
+            </div>
+          `;
+
+          const imgs = tempContainer.querySelectorAll('img');
+          const img = imgs[0];
+          const logoImg = imgs[1];
+
+          const checkLoaded = () => {
+            document.fonts.ready.then(() => {
+              setTimeout(() => {
+                html2canvas(tempContainer.querySelector('#export-target'), {
+                  useCORS: true,
+                  scale: 2, // 雙倍超高解析度
+                  backgroundColor: null,
+                  logging: false
+                }).then(canvas => {
+                  canvas.toBlob(blob => {
+                    document.body.removeChild(tempContainer);
+                    resolve(blob);
+                  }, 'image/png');
+                }).catch(err => {
+                  console.error("渲染出錯", err);
+                  document.body.removeChild(tempContainer);
+                  resolve(null);
+                });
+              }, 400); // 確保繪製緩衝時間
+            });
+          };
+
+          if (img.complete && logoImg.complete) {
+            checkLoaded();
+          } else {
+            let loadedCount = 0;
+            const onImgLoad = () => {
+              loadedCount++;
+              if (loadedCount >= 2) checkLoaded();
+            };
+            img.onload = onImgLoad;
+            logoImg.onload = onImgLoad;
+            img.onerror = onImgLoad;
+            logoImg.onerror = onImgLoad;
+          }
+        });
+      };
+
+      // 導出單張卡片
+      const handleExportSingle = async () => {
+        setIsGenerating(true);
+        const blob = await renderCardToBlob(activeCard);
+        if (blob) {
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.download = `${activeCard.title || 'card'}.png`;
+          link.href = url;
+          link.click();
+          URL.revokeObjectURL(url);
+        }
+        setIsGenerating(false);
+      };
+
+      // 批次打包下載 ZIP
+      const handleExportAll = async () => {
+        setIsGenerating(true);
+        setProgress({ current: 0, total: cards.length });
+        const zip = new JSZip();
+
+        for (let i = 0; i < cards.length; i++) {
+          setProgress(prev => ({ ...prev, current: i + 1 }));
+          const card = cards[i];
+          const blob = await renderCardToBlob(card);
+          if (blob) {
+            const safeName = `${i + 1}_${card.title.replace(/[\\/:*?"<>|]/g, '_')}`;
+            zip.file(`${safeName}.png`, blob);
+          }
+        }
+
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const link = document.createElement('a');
+        link.download = `卡片批次導出_${Date.now()}.zip`;
+        link.href = url;
+        link.click();
+        URL.revokeObjectURL(url);
+
+        setIsGenerating(false);
+      };
+
+      return (
+        <div className="flex flex-col min-h-screen">
+          {/* 導覽列 */}
+          <header className="bg-[var(--Card-Bg)] border-b border-[var(--Card-Border)] px-6 py-4 flex flex-wrap justify-between items-center gap-4">
+            <div className="flex items-center gap-3">
+              <span className="bg-[var(--Primary)] text-[var(--on-primary)] font-bold p-2 rounded-lg text-lg">🎴</span>
+              <div>
+                <h1 className="text-xl font-bold tracking-wider text-[var(--Text)]">BatchCard 批次卡片產生器</h1>
+              </div>
+            </div>
+          </header>
+
+          {/* 主要工作區 */}
+          <main className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 p-6">
+            
+            {/* 左側：控制台（佔 5 欄） */}
+            <section className="lg:col-span-5 flex flex-col gap-6 max-h-[calc(100vh-140px)] overflow-y-auto no-scrollbar">
+              
+              {/* 品牌與版面設定 */}
+              <div className="card space-y-4">
+                <h2 className="text-md font-bold text-[var(--Text)] border-b border-[var(--Card-Border)] pb-2 mb-3">🎨 品牌與全局設定</h2>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  {/* 背景色 */}
+                  <div className="form-group mb-0">
+                    <label className="form-label">下半部背景顏色</label>
+                    <div className="flex gap-2 items-center">
+                      <input 
+                        type="color" 
+                        value={bgColor} 
+                        onChange={(e) => setBgColor(e.target.value)}
+                        className="w-10 h-10 rounded border border-[var(--Input-Border)] bg-transparent cursor-pointer"
+                      />
+                      <span className="text-sm font-mono text-[var(--Text-Muted)] uppercase">{bgColor}</span>
+                    </div>
+                  </div>
+                  
+                  {/* 比例 */}
+                  <div className="form-group mb-0">
+                    <label className="form-label">圖片比例</label>
+                    <select 
+                      value={aspectRatio} 
+                      onChange={(e) => setAspectRatio(e.target.value)}
+                      className="form-input form-input-sm"
+                    >
+                      <option value="4-5">4 : 5 (IG、社群貼文)</option>
+                      <option value="1-1">1 : 1 (正方形卡片)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Logo 上傳 */}
+                <div className="form-group mb-0">
+                  <label className="form-label">左下角品牌 Logo 浮水印</label>
+                  <div className="flex items-center gap-3">
+                    <img src={logo} className="w-12 h-12 rounded-full border border-[var(--Card-Border)] object-cover bg-slate-950" alt="Logo" />
+                    <label className="btn btn-secondary btn-sm cursor-pointer">
+                      更換 Logo
+                      <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'logo')} className="hidden" />
+                    </label>
+                    <button 
+                      onClick={() => setLogo(DEFAULT_LOGO)} 
+                      className="text-xs text-red-400 hover:text-red-300 transition-colors ml-2"
+                    >
+                      恢復預設
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* 卡片清單管理 */}
+              <div className="card flex-1 flex flex-col min-h-[300px]">
+                <div className="flex justify-between items-center border-b border-[var(--Card-Border)] pb-2 mb-3">
+                  <h2 className="text-md font-bold text-[var(--Text)]">🗂️ 卡片清單 ({cards.length})</h2>
+                  <button 
+                    onClick={handleAddCard}
+                    className="btn btn-primary btn-sm"
+                  >
+                    ➕ 新增卡片
+                  </button>
+                </div>
+
+                <div className="space-y-2 overflow-y-auto max-h-[300px] pr-1">
+                  {cards.map((card, index) => {
+                    const isActive = activeCardId === card.id;
+                    return (
+                      <div 
+                        key={card.id}
+                        onClick={() => setActiveCardId(card.id)}
+                        style={{
+                          backgroundColor: isActive ? 'var(--Primary-20)' : 'var(--Accent)',
+                          borderColor: isActive ? 'var(--Primary)' : 'var(--Card-Border)',
+                          color: isActive ? 'var(--Text)' : 'var(--Text-Muted)'
+                        }}
+                        className="p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-200 hover:border-[var(--Primary)]"
+                      >
+                        <div className="flex items-center gap-3 overflow-hidden">
+                          <span className="text-xs bg-slate-800 text-[var(--Text-Muted)] font-mono px-1.5 py-0.5 rounded">
+                            {index + 1}
+                          </span>
+                          <img src={card.image} className="w-10 h-10 object-cover rounded-lg flex-shrink-0" alt="" />
+                          <div className="overflow-hidden">
+                            <p className="font-bold text-sm truncate text-white">{card.title || '無標題'}</p>
+                            <p className="text-xs text-[var(--Text-Muted)] truncate">{card.content || '無內容'}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button 
+                            onClick={(e) => handleDuplicateCard(card, e)}
+                            title="複製此張卡片"
+                            className="p-1 text-[var(--Text-Muted)] hover:text-white transition-colors"
+                          >
+                            📋
+                          </button>
+                          <button 
+                            onClick={(e) => handleDeleteCard(card.id, e)}
+                            title="刪除此張卡片"
+                            className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                          >
+                            🗑️
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 編輯目前卡片內容 */}
+              {activeCard && (
+                <div className="card space-y-4">
+                  <h2 className="text-md font-bold text-[var(--Text)] border-b border-[var(--Card-Border)] pb-2 mb-3">✏️ 編輯選定卡片</h2>
+                  
+                  {/* 標題 */}
+                  <div className="form-group mb-0">
+                    <label className="form-label">標題 (襯線體)</label>
+                    <input 
+                      type="text"
+                      value={activeCard.title}
+                      onChange={(e) => updateActiveCard('title', e.target.value)}
+                      placeholder="請輸入大標題"
+                      className="form-input form-input-sm"
+                    />
+                  </div>
+
+                  {/* 內文 */}
+                  <div className="form-group mb-0">
+                    <label className="form-label">卡片內文 (建議 100 字以內效果最佳)</label>
+                    <textarea 
+                      rows="4"
+                      value={activeCard.content}
+                      onChange={(e) => updateActiveCard('content', e.target.value)}
+                      placeholder="請輸入卡片細節描述..."
+                      className="form-input form-input-sm resize-none leading-relaxed"
+                    />
+                    <div className="flex justify-between items-center mt-1">
+                      <span className="text-[10px] text-yellow-500/80">💡 提示：使用純 CSS 邊框畫斜角，轉檔導出完全不怕掉失！</span>
+                      <span className="text-xs text-[var(--Text-Muted)] font-mono">目前字數: {activeCard.content?.length || 0}</span>
+                    </div>
+                  </div>
+
+                  {/* 背景配圖 */}
+                  <div className="form-group mb-0">
+                    <label className="form-label">卡片背景配圖</label>
+                    <div className="flex items-center gap-3">
+                      <img src={activeCard.image} className="w-12 h-12 rounded border border-[var(--Card-Border)] object-cover bg-slate-900" alt="Card visual" />
+                      <div className="flex-1 overflow-hidden">
+                        <p className="text-xs text-[var(--Text-Muted)] truncate font-mono mb-1">{activeCard.imageName || '網路圖片'}</p>
+                        <div className="flex gap-2">
+                          <label className="btn btn-secondary btn-sm cursor-pointer">
+                            📷 上傳本地圖片
+                            <input type="file" accept="image/*" onChange={(e) => handleImageUpload(e, 'card-image')} className="hidden" />
+                          </label>
+                          <button 
+                            onClick={() => {
+                              const url = prompt('請輸入外鏈圖片網址:');
+                              if (url) {
+                                updateActiveCard('image', url);
+                                updateActiveCard('imageName', '手動輸入網址');
+                              }
+                            }}
+                            className="btn btn-secondary btn-sm"
+                          >
+                            🔗 輸入網址
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </section>
+
+            {/* 右側：即時高保真預覽與導出（佔 7 欄） */}
+            <section className="lg:col-span-7 flex flex-col justify-between items-center card card-lg bg-slate-950/60">
+              
+              <div className="w-full mb-4 flex justify-between items-center">
+                <span className="text-sm font-semibold text-slate-400">👀 即時預覽效果 (向量與 CSS 邊框完美同步)</span>
+                <span className="text-xs bg-blue-900/40 text-blue-300 border border-blue-800/50 px-2.5 py-1 rounded-full font-mono">
+                  輸出解析度: 1600 × {aspectRatio === '4-5' ? '2000' : '1600'}
+                </span>
+              </div>
+
+              {/* 預覽卡片框架 */}
+              <div className="flex-1 flex items-center justify-center w-full py-4">
+                <div 
+                  id="preview-card"
+                  style={{ backgroundColor: bgColor }}
+                  className={`relative shadow-2xl overflow-hidden rounded-lg flex flex-col transition-all duration-300 select-none ${
+                    aspectRatio === '4-5' ? 'w-[360px] h-[450px]' : 'w-[360px] h-[360px]'
+                  }`}
+                >
+                  {/* 上半部圖片 */}
+                  <div className="h-[50%] w-full overflow-hidden relative bg-slate-800">
+                    {activeCard.image ? (
+                      <img 
+                        src={activeCard.image} 
+                        className="w-full h-full object-cover pointer-events-none" 
+                        alt="Preview background" 
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-slate-500 text-sm">無圖片</div>
+                    )}
+                    
+                    {/* 【核心修正】預覽中的純 CSS 邊框三角形遮罩 (寬度固定 360px) */}
+                    <div style={{
+                      position: 'absolute',
+                      bottom: '-1px',
+                      left: 0,
+                      width: 0,
+                      height: 0,
+                      borderStyle: 'solid',
+                      borderWidth: '0 0 25px 360px',
+                      borderColor: `transparent transparent ${bgColor} transparent`,
+                      zIndex: 10,
+                      pointerEvents: 'none'
+                    }}></div>
+                  </div>
+                  
+                  {/* 下半部文字 */}
+                  <div className="h-[50%] p-6 flex flex-col justify-start relative box-border">
+                    {/* 標題 (襯線體) */}
+                    <h1 className="text-white font-serif-tc text-2xl font-black mb-3 leading-snug tracking-wide line-clamp-2">
+                      {activeCard.title || '請輸入標題'}
+                    </h1>
+                    
+                    {/* 內文 (無襯線體) */}
+                    <p className="text-slate-100/90 font-light text-xs leading-relaxed text-justify line-clamp-6">
+                      {activeCard.content || '請在左側輸入內文...'}
+                    </p>
+                  </div>
+
+                  {/* 左下角 Logo 浮水印 (絕對定位) */}
+                  <div className="absolute bottom-4 left-4 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-transparent">
+                    {logo && <img src={logo} className="w-full h-full object-cover" alt="Watermark" />}
+                  </div>
+                </div>
+              </div>
+
+              {/* 導出按鈕與進度條 */}
+              <div className="w-full mt-6 space-y-4">
+                {isGenerating && progress.total > 0 && (
+                  <div className="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-blue-500 to-teal-400 h-2.5 rounded-full transition-all duration-300" 
+                      style={{ width: `${(progress.current / progress.total) * 100}%` }}
+                    ></div>
+                    <p className="text-center text-xs text-slate-400 mt-1.5">
+                      正在產生並打包圖片中... ({progress.current} / {progress.total})
+                    </p>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={handleExportSingle}
+                    disabled={isGenerating}
+                    className={`btn btn-secondary ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    💾 下載目前單張 PNG
+                  </button>
+                  <button
+                    onClick={handleExportAll}
+                    disabled={isGenerating}
+                    className={`btn btn-primary ${isGenerating ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    ⚡ 一鍵打包全部卡片 (ZIP)
+                  </button>
+                </div>
+              </div>
+
+            </section>
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
