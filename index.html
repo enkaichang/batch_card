@@ -203,7 +203,8 @@
         title: '網站故事',
         content: '社會學大師涂爾幹說：宗教不只是拜神，而是人類把東西分成「神聖」和「世俗」的過程。宗教其實是一種把人們緊緊綁在一起的道德共同體。我們之所以參加儀式，實際上是為了確認彼此是一家人。',
         image: '/batch_card/static/images/together.jpg',
-        imageName: '預設插圖'
+        imageName: '預設插圖',
+        cardType: 'content'
       }
     ];
 
@@ -240,14 +241,15 @@
       };
 
       // 新增卡片
-      const handleAddCard = () => {
+      const handleAddCard = (type = 'content') => {
         const newId = Date.now().toString();
         const newCard = {
           id: newId,
-          title: '新卡片標題',
-          content: '請在這裡輸入卡片的內文說明，排版會自動適應高度並呈現美觀的文字行高與間距。',
+          title: type === 'cover' ? '新封面標題' : '新卡片標題',
+          content: type === 'cover' ? '封面副標題或說明' : '請在這裡輸入卡片的內文說明，排版會自動適應高度並呈現美觀的文字行高與間距。',
           image: 'https://images.unsplash.com/photo-1507842229512-238dd25936ce?auto=format&fit=crop&w=800&q=80',
-          imageName: '預設書本圖'
+          imageName: '預設書本圖',
+          cardType: type
         };
         setCards(prev => [...prev, newCard]);
         setActiveCardId(newId);
@@ -311,7 +313,86 @@
           const width = 800;
           const height = aspectRatio === '4-5' ? 1000 : 800;
 
-          tempContainer.innerHTML = `
+          const isCover = cardData.cardType === 'cover';
+
+          tempContainer.innerHTML = isCover ? `
+            <div id="export-target" style="
+              width: ${width}px; 
+              height: ${height}px; 
+              background-color: ${bgColor}; 
+              position: relative;
+              overflow: hidden;
+            ">
+              <!-- 封面背景圖 -->
+              <img ${getImgSrcAndCors(cardData.image)} style="position: absolute; left: 0; top: 0; width: 100%; height: 100%; object-fit: cover;" />
+              
+              <!-- 封面半透明黑色色塊與漸層 -->
+              <div style="
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.5) 50%, rgba(0, 0, 0, 0.2) 100%);
+                z-index: 5;
+              "></div>
+              
+              <!-- 封面文字內容 -->
+              <div style="
+                position: relative;
+                z-index: 10;
+                padding: 56px 56px 120px 56px; 
+                display: flex; 
+                flex-direction: column; 
+                justify-content: flex-end;
+                height: 100%;
+                box-sizing: border-box;
+              ">
+                <!-- 標題 (襯線體) -->
+                <h1 style="
+                  color: #ffffff; 
+                  font-family: 'Noto Serif TC', serif; 
+                  font-size: 56px; 
+                  font-weight: 900; 
+                  margin-bottom: 24px;
+                  line-height: 1.3;
+                  letter-spacing: 1px;
+                  text-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
+                ">${cardData.title}</h1>
+                
+                <!-- 副標題 (無襯線體) -->
+                ${cardData.content ? `
+                <p style="
+                  color: rgba(255, 255, 255, 0.9); 
+                  font-family: 'Noto Sans TC', sans-serif; 
+                  font-size: 26px; 
+                  line-height: 1.6;
+                  font-weight: 300;
+                  margin: 0;
+                  text-align: justify;
+                  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+                ">${cardData.content}</p>
+                ` : ''}
+              </div>
+
+              <!-- 左下角 Logo 浮水印 -->
+              <div style="
+                position: absolute; 
+                bottom: 28px; 
+                left: 28px; 
+                width: 72px; 
+                height: 72px;
+                border-radius: 50%;
+                overflow: hidden;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                z-index: 15;
+              ">
+                <img ${getImgSrcAndCors(logo)} style="width: 100%; height: 100%; object-fit: cover;" />
+              </div>
+            </div>
+          ` : `
             <div id="export-target" style="
               width: ${width}px; 
               height: ${height}px; 
@@ -553,12 +634,20 @@
               <div className="card flex-1 flex flex-col min-h-[300px]">
                 <div className="flex justify-between items-center border-b border-[var(--Card-Border)] pb-2 mb-3">
                   <h2 className="text-md font-bold text-[var(--Text)] flex items-center gap-2"><span className="material-symbols-outlined" style={{fontSize: '20px'}}>folder_open</span> 卡片清單 ({cards.length})</h2>
-                  <button 
-                    onClick={handleAddCard}
-                    className="btn btn-primary btn-sm"
-                  >
-                    <span className="material-symbols-outlined" style={{fontSize: '16px'}}>add</span> 新增卡片
-                  </button>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => handleAddCard('content')}
+                      className="btn btn-primary btn-sm flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined" style={{fontSize: '14px'}}>add</span> 內頁
+                    </button>
+                    <button 
+                      onClick={() => handleAddCard('cover')}
+                      className="btn btn-secondary btn-sm flex items-center gap-1 border-slate-700 bg-slate-800 hover:bg-slate-700 text-white"
+                    >
+                      <span className="material-symbols-outlined" style={{fontSize: '14px'}}>auto_stories</span> 封面
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-2 overflow-y-auto max-h-[300px] pr-1">
@@ -581,7 +670,12 @@
                           </span>
                           <img src={card.image} className="w-10 h-10 object-cover rounded-lg flex-shrink-0" alt="" />
                           <div className="overflow-hidden">
-                            <p className="font-bold text-sm truncate text-white">{card.title || '無標題'}</p>
+                            <p className="font-bold text-sm truncate text-white flex items-center gap-1.5">
+                              {card.cardType === 'cover' && (
+                                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded border border-blue-500/30 font-normal">封面</span>
+                              )}
+                              {card.title || '無標題'}
+                            </p>
                             <p className="text-xs text-[var(--Text-Muted)] truncate">{card.content || '無內容'}</p>
                           </div>
                         </div>
@@ -611,6 +705,35 @@
               {activeCard && (
                 <div className="card space-y-4">
                   <h2 className="text-md font-bold text-[var(--Text)] border-b border-[var(--Card-Border)] pb-2 mb-3 flex items-center gap-2"><span className="material-symbols-outlined" style={{fontSize: '20px'}}>edit</span> 編輯選定卡片</h2>
+                  
+                  {/* 卡片類型 */}
+                  <div className="form-group mb-0">
+                    <label className="form-label">卡片類型</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateActiveCard('cardType', 'content')}
+                        className={`py-2 px-4 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 ${
+                          (activeCard.cardType || 'content') === 'content'
+                            ? 'bg-[var(--Primary)] text-[var(--on-primary)] shadow-sm'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-750'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined" style={{fontSize: '16px'}}>article</span> 一般內頁
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateActiveCard('cardType', 'cover')}
+                        className={`py-2 px-4 rounded-xl font-bold text-xs transition flex items-center justify-center gap-2 ${
+                          activeCard.cardType === 'cover'
+                            ? 'bg-[var(--Primary)] text-[var(--on-primary)] shadow-sm'
+                            : 'bg-slate-800 text-slate-400 border border-slate-700 hover:bg-slate-750'
+                        }`}
+                      >
+                        <span className="material-symbols-outlined" style={{fontSize: '16px'}}>auto_stories</span> 封面卡片
+                      </button>
+                    </div>
+                  </div>
                   
                   {/* 標題 */}
                   <div className="form-group mb-0">
@@ -691,48 +814,80 @@
                     aspectRatio === '4-5' ? 'w-[360px] h-[450px]' : 'w-[360px] h-[360px]'
                   }`}
                 >
-                  {/* 上半部圖片 */}
-                  <div className="h-[50%] w-full overflow-hidden relative bg-slate-800">
-                    {activeCard.image ? (
-                      <img 
-                        src={activeCard.image} 
-                        className="w-full h-full object-cover pointer-events-none" 
-                        alt="Preview background" 
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-500 text-sm">無圖片</div>
-                    )}
-                    
-                    {/* 【核心修正】預覽中的純 CSS 邊框三角形遮罩 (寬度固定 360px) */}
-                    <div style={{
-                      position: 'absolute',
-                      bottom: '-1px',
-                      left: 0,
-                      width: 0,
-                      height: 0,
-                      borderStyle: 'solid',
-                      borderWidth: '0 0 25px 360px',
-                      borderColor: `transparent transparent ${bgColor} transparent`,
-                      zIndex: 10,
-                      pointerEvents: 'none'
-                    }}></div>
-                  </div>
-                  
-                  {/* 下半部文字 */}
-                  <div className="h-[50%] p-6 flex flex-col justify-start relative box-border">
-                    {/* 標題 (襯線體) */}
-                    <h1 className="text-white font-serif-tc text-2xl font-black mb-3 leading-snug tracking-wide line-clamp-2">
-                      {activeCard.title || '請輸入標題'}
-                    </h1>
-                    
-                    {/* 內文 (無襯線體) */}
-                    <p className="text-slate-100/90 font-light text-xs leading-relaxed text-justify line-clamp-6">
-                      {activeCard.content || '請在左側輸入內文...'}
-                    </p>
-                  </div>
+                  {activeCard.cardType === 'cover' ? (
+                    <>
+                      {/* 封面背景圖 */}
+                      {activeCard.image ? (
+                        <img 
+                          src={activeCard.image} 
+                          className="absolute inset-0 w-full h-full object-cover pointer-events-none" 
+                          alt="Preview background" 
+                        />
+                      ) : (
+                        <div className="absolute inset-0 w-full h-full flex items-center justify-center text-slate-500 bg-slate-800 text-sm">無圖片</div>
+                      )}
+
+                      {/* 封面半透明黑色色塊與漸層 */}
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/50 to-black/15 z-10 pointer-events-none" />
+
+                      {/* 封面文字標題 */}
+                      <div className="absolute inset-0 z-20 p-6 pb-14 flex flex-col justify-end box-border">
+                        <h1 className="text-white font-serif-tc text-2xl font-black mb-2 leading-snug tracking-wide line-clamp-3" style={{ textShadow: '0 2px 8px rgba(0, 0, 0, 0.6)' }}>
+                          {activeCard.title || '請輸入標題'}
+                        </h1>
+                        {activeCard.content && (
+                          <p className="text-slate-200/90 font-light text-[11px] leading-relaxed text-justify line-clamp-3" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.6)' }}>
+                            {activeCard.content}
+                          </p>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* 上半部圖片 */}
+                      <div className="h-[50%] w-full overflow-hidden relative bg-slate-800">
+                        {activeCard.image ? (
+                          <img 
+                            src={activeCard.image} 
+                            className="w-full h-full object-cover pointer-events-none" 
+                            alt="Preview background" 
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-slate-500 text-sm">無圖片</div>
+                        )}
+                        
+                        {/* 【核心修正】預覽中的純 CSS 邊框三角形遮罩 (寬度固定 360px) */}
+                        <div style={{
+                          position: 'absolute',
+                          bottom: '-1px',
+                          left: 0,
+                          width: 0,
+                          height: 0,
+                          borderStyle: 'solid',
+                          borderWidth: '0 0 25px 360px',
+                          borderColor: `transparent transparent ${bgColor} transparent`,
+                          zIndex: 10,
+                          pointerEvents: 'none'
+                        }}></div>
+                      </div>
+                      
+                      {/* 下半部文字 */}
+                      <div className="h-[50%] p-6 flex flex-col justify-start relative box-border">
+                        {/* 標題 (襯線體) */}
+                        <h1 className="text-white font-serif-tc text-2xl font-black mb-3 leading-snug tracking-wide line-clamp-2">
+                          {activeCard.title || '請輸入標題'}
+                        </h1>
+                        
+                        {/* 內文 (無襯線體) */}
+                        <p className="text-slate-100/90 font-light text-xs leading-relaxed text-justify line-clamp-6">
+                          {activeCard.content || '請在左側輸入內文...'}
+                        </p>
+                      </div>
+                    </>
+                  )}
 
                   {/* 左下角 Logo 浮水印 (絕對定位) */}
-                  <div className="absolute bottom-4 left-4 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-transparent">
+                  <div className="absolute bottom-4 left-4 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center bg-transparent z-30">
                     {logo && <img src={logo} className="w-full h-full object-cover" alt="Watermark" />}
                   </div>
                 </div>
