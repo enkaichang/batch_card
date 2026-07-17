@@ -21,6 +21,13 @@
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   
+  <!-- Google Gen AI SDK -->
+  <script type="module">
+    import { GoogleGenAI, setDefaultBaseUrls } from 'https://esm.sh/@google/genai';
+    window.GoogleGenAI = GoogleGenAI;
+    window.setDefaultBaseUrls = setDefaultBaseUrls;
+  </script>
+  
   <style>
     :root {
       --Primary: #81B2D1;
@@ -71,6 +78,79 @@
     }
     ::-webkit-scrollbar-thumb:hover {
       background: var(--Secondary);
+    }
+
+    /* ==================== AI Streaming Animations ==================== */
+    @keyframes shimmer {
+      0% { background-position: -200% 0; }
+      100% { background-position: 200% 0; }
+    }
+    @keyframes fadeInUp {
+      0% { opacity: 0; transform: translateY(16px) scale(0.97); }
+      100% { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes glowPulse {
+      0%, 100% { box-shadow: 0 0 8px 0px rgba(129, 178, 209, 0.3), inset 0 0 0 1px rgba(129, 178, 209, 0.4); }
+      50% { box-shadow: 0 0 20px 4px rgba(129, 178, 209, 0.5), inset 0 0 0 1px rgba(129, 178, 209, 0.7); }
+    }
+    @keyframes typingCursor {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+    @keyframes sparkle {
+      0%, 100% { opacity: 0.4; transform: scale(0.8); }
+      50% { opacity: 1; transform: scale(1.2); }
+    }
+
+    .ai-writing {
+      animation: glowPulse 1.8s ease-in-out infinite;
+      border-color: var(--Primary) !important;
+    }
+    .ai-card-enter {
+      animation: fadeInUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .ai-shimmer-overlay {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      z-index: 50;
+      background: linear-gradient(
+        90deg,
+        transparent 0%,
+        rgba(129, 178, 209, 0.06) 25%,
+        rgba(129, 178, 209, 0.15) 50%,
+        rgba(129, 178, 209, 0.06) 75%,
+        transparent 100%
+      );
+      background-size: 200% 100%;
+      animation: shimmer 2s linear infinite;
+    }
+    .ai-typing-cursor::after {
+      content: '▍';
+      color: var(--Primary);
+      font-weight: 300;
+      animation: typingCursor 0.8s step-end infinite;
+      margin-left: 1px;
+    }
+    .ai-stream-progress {
+      position: relative;
+      overflow: hidden;
+    }
+    .ai-stream-progress::before {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      height: 2px;
+      width: 100%;
+      background: linear-gradient(90deg, transparent, var(--Primary), transparent);
+      background-size: 200% 100%;
+      animation: shimmer 1.5s linear infinite;
+    }
+    .ai-sparkle {
+      display: inline-block;
+      animation: sparkle 1.2s ease-in-out infinite;
     }
 
     /* ==================== Card ==================== */
@@ -220,6 +300,23 @@
       const [isGenerating, setIsGenerating] = useState(false);
       const [progress, setProgress] = useState({ current: 0, total: 0 });
 
+      // Gemini API states
+      const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
+      const [apiEndpoint, setApiEndpoint] = useState(() => localStorage.getItem('gemini_api_endpoint') || '');
+      const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.5-flash');
+      const [customModel, setCustomModel] = useState(() => localStorage.getItem('gemini_custom_model') || '');
+      const [targetCount, setTargetCount] = useState(5);
+      const [genMode, setGenMode] = useState('replace'); // 'replace' or 'append'
+      const [articleText, setArticleText] = useState('');
+      const [isAiGenerating, setIsAiGenerating] = useState(false);
+      const [showApiSettings, setShowApiSettings] = useState(() => !localStorage.getItem('gemini_api_key'));
+
+      // Streaming states
+      const [streamingCards, setStreamingCards] = useState([]); // cards being streamed in
+      const [streamingText, setStreamingText] = useState(''); // raw accumulated text
+      const [activeStreamIndex, setActiveStreamIndex] = useState(-1); // which card is currently being written
+      const [showApiKeyText, setShowApiKeyText] = useState(false);
+
       const activeCard = cards.find(c => c.id === activeCardId) || cards[0] || {};
 
       const getImgSrcAndCors = (url) => {
@@ -299,8 +396,217 @@
         reader.readAsDataURL(file);
       };
 
+      // 清理 LLM 回傳的 Markdown 或雜訊，只保留 JSON
+      const cleanJson = (text) => {
+        let cleaned = text.trim();
+        if (cleaned.startsWith('```json')) {
+          cleaned = cleaned.substring(7);
+        } else if (cleaned.startsWith('```')) {
+          cleaned = cleaned.substring(3);
+        }
+        if (cleaned.endsWith('```')) {
+          cleaned = cleaned.substring(0, cleaned.length - 3);
+        }
+        return cleaned.trim();
+      };
 
+      // ==================== Streaming JSON Parser ====================
+      // Incrementally parse a partial JSON array string to extract complete objects
+      const parsePartialJsonArray = (text) => {
+        const results = [];
+        let depth = 0;
+        let inString = false;
+        let escape = false;
+        let objStart = -1;
 
+        for (let i = 0; i < text.length; i++) {
+          const ch = text[i];
+          if (escape) { escape = false; continue; }
+          if (ch === '\\') { escape = true; continue; }
+          if (ch === '"') { inString = !inString; continue; }
+          if (inString) continue;
+
+          if (ch === '{') {
+            if (depth === 0) objStart = i;
+            depth++;
+          } else if (ch === '}') {
+            depth--;
+            if (depth === 0 && objStart !== -1) {
+              const slice = text.substring(objStart, i + 1);
+              try {
+                results.push(JSON.parse(slice));
+              } catch (e) { /* incomplete object, skip */ }
+              objStart = -1;
+            }
+          }
+        }
+        return results;
+      };
+
+      // 呼叫 Gemini API 智慧生成卡片 (Streaming)
+      const handleAiGenerate = async () => {
+        if (!apiKey.trim()) {
+          alert('請先輸入並儲存您的 Gemini API Key！');
+          return;
+        }
+        if (!articleText.trim()) {
+          alert('請先輸入文章內容再進行生成！');
+          return;
+        }
+
+        setIsAiGenerating(true);
+        setStreamingCards([]);
+        setStreamingText('');
+        setActiveStreamIndex(-1);
+
+        // If replace mode, clear existing cards immediately
+        if (genMode === 'replace') {
+          setCards([]);
+          setActiveCardId('');
+        }
+
+        try {
+          if (!window.GoogleGenAI) {
+            throw new Error('Gemini SDK 尚未載入完成，請稍後再試。');
+          }
+
+          // 如果有填寫自訂 Base URL，則設定預設 API 端點
+          if (apiEndpoint && apiEndpoint.trim()) {
+            try {
+              window.setDefaultBaseUrls({
+                geminiUrl: apiEndpoint.trim()
+              });
+            } catch (err) {
+              console.warn("無法設定自訂 Base URL:", err);
+            }
+          }
+
+          const ai = new window.GoogleGenAI({ apiKey: apiKey.trim() });
+          const modelToUse = selectedModel === 'custom' ? customModel.trim() : selectedModel;
+          if (!modelToUse) {
+            throw new Error('請指定要使用的模型名稱！');
+          }
+
+          // Use streaming API — single request, counts as 1 RPD
+          const stream = await ai.models.generateContentStream({
+            model: modelToUse,
+            contents: `請幫我將以下文章整理成 ${targetCount} 張卡片：\n\n${articleText}`,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: 'array',
+                items: {
+                  type: 'object',
+                  properties: {
+                    cardType: {
+                      type: 'string',
+                      enum: ['cover', 'content'],
+                      description: '卡片類型，第一張卡片必須是 cover，其餘為 content'
+                    },
+                    title: {
+                      type: 'string',
+                      description: '卡片標題或重點標題'
+                    },
+                    content: {
+                      type: 'string',
+                      description: '卡片詳細摘要內容'
+                    }
+                  },
+                  required: ['cardType', 'title', 'content']
+                }
+              },
+              systemInstruction: `你是一個專業的內容摘要與社群簡報卡片製作專家。你的任務是閱讀使用者提供的一篇文章，並將其整理成一套美觀、邏輯清晰的社群卡片內容（投影片/簡報卡片）。
+注意事項：
+1. 第一張卡片必須是 "cardType": "cover"，作為封面。
+2. 其餘卡片為 "cardType": "content"。
+3. 總卡片數量限制在使用者指定的數量範圍內。
+4. 內容與標題必須使用「繁體中文（台灣）」，語氣親切流暢、條理清晰。`,
+              temperature: 0.7
+            }
+          });
+
+          let accumulated = '';
+          let prevParsedCount = 0;
+          const baseTimestamp = Date.now();
+
+          for await (const chunk of stream) {
+            const chunkText = chunk.text;
+            if (!chunkText) continue;
+            accumulated += chunkText;
+
+            // Parse all complete objects found so far
+            const parsedObjects = parsePartialJsonArray(accumulated);
+
+            if (parsedObjects.length > prevParsedCount) {
+              // New card(s) completed!
+              const newCards = parsedObjects.slice(prevParsedCount).map((item, idx) => {
+                const globalIdx = prevParsedCount + idx;
+                const isCover = item.cardType === 'cover';
+                return {
+                  id: (baseTimestamp + globalIdx).toString(),
+                  title: item.title || (isCover ? '無標題封面' : `第 ${globalIdx} 頁`),
+                  content: item.content || '',
+                  image: 'https://images.unsplash.com/photo-1507842229512-238dd25936ce?auto=format&fit=crop&w=800&q=80',
+                  imageName: '預設書本圖',
+                  cardType: isCover ? 'cover' : 'content',
+                  _isNew: true  // animation flag
+                };
+              });
+
+              prevParsedCount = parsedObjects.length;
+
+              // Add completed cards to the real card list
+              setCards(prev => {
+                const updated = [...prev, ...newCards];
+                return updated;
+              });
+              // Auto-select the latest card to show it in preview
+              setActiveCardId(newCards[newCards.length - 1].id);
+            }
+
+            // Update streaming visual state
+            setStreamingText(accumulated);
+            setActiveStreamIndex(parsedObjects.length); // index of card currently being written
+
+            // Update streaming cards (including incomplete ones for live preview)
+            setStreamingCards(parsedObjects);
+          }
+
+          // Final cleanup — make sure all cards are added
+          const finalParsed = parsePartialJsonArray(accumulated);
+          if (finalParsed.length > prevParsedCount) {
+            const remainingCards = finalParsed.slice(prevParsedCount).map((item, idx) => {
+              const globalIdx = prevParsedCount + idx;
+              const isCover = item.cardType === 'cover';
+              return {
+                id: (baseTimestamp + globalIdx).toString(),
+                title: item.title || (isCover ? '無標題封面' : `第 ${globalIdx} 頁`),
+                content: item.content || '',
+                image: 'https://images.unsplash.com/photo-1507842229512-238dd25936ce?auto=format&fit=crop&w=800&q=80',
+                imageName: '預設書本圖',
+                cardType: isCover ? 'cover' : 'content'
+              };
+            });
+            setCards(prev => [...prev, ...remainingCards]);
+            setActiveCardId(remainingCards[remainingCards.length - 1].id);
+          }
+
+          // Clear animation flags after a moment
+          setTimeout(() => {
+            setCards(prev => prev.map(c => ({ ...c, _isNew: false })));
+          }, 800);
+
+          setStreamingCards([]);
+          setStreamingText('');
+          setActiveStreamIndex(-1);
+
+        } catch (error) {
+          console.error(error);
+          alert(`生成失敗: ${error.message}\n\n提示：請確認您的 Gemini API Key 是否正確且具有使用該模型的權限。`);
+        } finally {
+          setIsAiGenerating(false);
+        }
+      };
 
       const renderCardToBlob = async (cardData) => {
         return new Promise((resolve) => {
@@ -402,9 +708,9 @@
               position: relative;
               overflow: hidden;
             ">
-              <!-- 上半部圖片 (佔 50%) -->
+              <!-- 上半部圖片 (佔 40%) -->
               <div style="
-                height: 50%; 
+                height: 40%; 
                 width: 100%; 
                 overflow: hidden; 
                 position: relative;
@@ -428,8 +734,8 @@
               
               <!-- 下半部文字 -->
               <div style="
-                height: 50%; 
-                padding: 48px 56px; 
+                height: 60%; 
+                padding: 48px 56px 120px 56px; 
                 display: flex; 
                 flex-direction: column; 
                 justify-content: flex-start;
@@ -630,6 +936,194 @@
                 </div>
               </div>
 
+              {/* Gemini AI 智慧生成 */}
+              <div className="card space-y-4">
+                <h2 className="text-md font-bold text-[var(--Text)] border-b border-[var(--Card-Border)] pb-2 mb-3 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-[var(--Primary)] animate-pulse" style={{fontSize: '20px'}}>psychology</span> Gemini AI 智慧生成
+                </h2>
+                
+                {/* API 設定 */}
+                <div className="bg-slate-900/60 p-3 rounded-xl border border-slate-800 space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-semibold text-slate-400">Gemini API 設定</span>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowApiSettings(!showApiSettings)}
+                      className="text-xs text-[var(--Primary)] hover:underline flex items-center gap-1"
+                    >
+                      <span className="material-symbols-outlined" style={{fontSize: '14px'}}>settings</span>
+                      {showApiSettings ? '隱藏設定' : '展開設定'}
+                    </button>
+                  </div>
+                  
+                  {(showApiSettings || !apiKey) && (
+                    <div className="space-y-3 pt-2 border-t border-slate-800/60">
+                      <div>
+                        <label className="form-label text-[10px]">Gemini API Key</label>
+                        <div className="relative">
+                          <input 
+                            type={showApiKeyText ? "text" : "password"}
+                            value={apiKey}
+                            onChange={(e) => {
+                              setApiKey(e.target.value);
+                              localStorage.setItem('gemini_api_key', e.target.value);
+                            }}
+                            placeholder="AIzaSy..."
+                            className="form-input form-input-sm pr-10"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowApiKeyText(!showApiKeyText)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                          >
+                            <span className="material-symbols-outlined" style={{fontSize: '18px'}}>
+                              {showApiKeyText ? 'visibility_off' : 'visibility'}
+                            </span>
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1">
+                          密鑰會儲存在您的瀏覽器本地 (localStorage)
+                        </p>
+                      </div>
+                      
+                      <div>
+                        <label className="form-label text-[10px]">API 端點/代理 (選填)</label>
+                        <input 
+                          type="text"
+                          value={apiEndpoint}
+                          onChange={(e) => {
+                            setApiEndpoint(e.target.value);
+                            localStorage.setItem('gemini_api_endpoint', e.target.value);
+                          }}
+                          placeholder="例如: https://gateway.ai.cloudflare.com/..."
+                          className="form-input form-input-sm"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 生成參數 */}
+                <div className="space-y-3">
+                  <div>
+                    <label className="form-label text-[10px]">選擇 Gemini 模型</label>
+                    <select 
+                      value={selectedModel}
+                      onChange={(e) => {
+                        setSelectedModel(e.target.value);
+                        localStorage.setItem('gemini_model', e.target.value);
+                      }}
+                      className="form-input form-input-sm bg-slate-900 border-slate-700"
+                    >
+                      <option value="gemini-2.5-flash">gemini-2.5-flash (推薦/極速)</option>
+                      <option value="gemini-2.5-pro">gemini-2.5-pro (精準推理)</option>
+                      <option value="gemini-2.0-flash">gemini-2.0-flash (前代 Flash)</option>
+                      <option value="gemini-1.5-flash">gemini-1.5-flash (經典 Flash)</option>
+                      <option value="gemini-1.5-pro">gemini-1.5-pro (經典 Pro)</option>
+                      <option value="custom">自訂模型名稱...</option>
+                    </select>
+                    
+                    {selectedModel === 'custom' && (
+                      <input 
+                        type="text"
+                        value={customModel}
+                        onChange={(e) => {
+                          setCustomModel(e.target.value);
+                          localStorage.setItem('gemini_custom_model', e.target.value);
+                        }}
+                        placeholder="例如: gemini-2.5-flash"
+                        className="form-input form-input-sm mt-2"
+                      />
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="form-label text-[10px]">預計卡片張數</label>
+                      <input 
+                        type="number"
+                        min="1"
+                        max="20"
+                        value={targetCount}
+                        onChange={(e) => setTargetCount(parseInt(e.target.value) || 5)}
+                        className="form-input form-input-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label text-[10px]">生成模式</label>
+                      <select 
+                        value={genMode}
+                        onChange={(e) => setGenMode(e.target.value)}
+                        className="form-input form-input-sm bg-slate-900 border-slate-700"
+                      >
+                        <option value="replace">替換現有卡片</option>
+                        <option value="append">追加至後面</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="form-label text-[10px]">輸入文章內容</label>
+                    <textarea 
+                      rows="5"
+                      value={articleText}
+                      onChange={(e) => setArticleText(e.target.value)}
+                      placeholder="請貼上您想產生卡片的文章內容..."
+                      className="form-input form-input-sm resize-none leading-relaxed text-sm"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAiGenerate}
+                    disabled={isAiGenerating || !apiKey.trim() || !articleText.trim()}
+                    className={`btn btn-primary w-full flex items-center justify-center gap-2 ${
+                      (isAiGenerating || !apiKey.trim() || !articleText.trim()) ? 'opacity-50 cursor-not-allowed' : ''
+                    }`}
+                  >
+                    {isAiGenerating ? (
+                      <>
+                        <span className="ai-sparkle material-symbols-outlined" style={{fontSize: '18px'}}>auto_awesome</span>
+                        <span>AI 串流生成中... ({streamingCards.length}/{targetCount})</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="material-symbols-outlined" style={{fontSize: '18px'}}>auto_awesome</span>
+                        開始 AI 智慧生成
+                      </>
+                    )}
+                  </button>
+                  
+                  {/* Streaming progress indicator */}
+                  {isAiGenerating && (
+                    <div className="space-y-2 mt-3">
+                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div 
+                          className="h-1.5 rounded-full transition-all duration-500 ease-out"
+                          style={{
+                            width: `${Math.max(5, (streamingCards.length / targetCount) * 100)}%`,
+                            background: 'linear-gradient(90deg, #81B2D1, #60d9fa, #81B2D1)',
+                            backgroundSize: '200% 100%',
+                            animation: 'shimmer 1.5s linear infinite'
+                          }}
+                        />
+                      </div>
+                      <p className="text-[11px] text-[var(--Primary)] text-center font-medium flex items-center justify-center gap-1.5">
+                        <span className="material-symbols-outlined" style={{fontSize: '14px'}}>stream</span>
+                        串流模式：單次 API 請求，即時生成中
+                      </p>
+                    </div>
+                  )}
+                  
+                  {!apiKey.trim() && !isAiGenerating && (
+                    <p className="text-xs text-yellow-500/90 text-center flex items-center justify-center gap-1 mt-2">
+                      <span className="material-symbols-outlined" style={{fontSize: '14px'}}>warning</span>
+                      請先在上方展開設定並輸入 Gemini API Key
+                    </p>
+                  )}
+                </div>
+              </div>
+
               {/* 卡片清單管理 */}
               <div className="card flex-1 flex flex-col min-h-[300px]">
                 <div className="flex justify-between items-center border-b border-[var(--Card-Border)] pb-2 mb-3">
@@ -653,6 +1147,7 @@
                 <div className="space-y-2 overflow-y-auto max-h-[300px] pr-1">
                   {cards.map((card, index) => {
                     const isActive = activeCardId === card.id;
+                    const isNewFromStream = card._isNew;
                     return (
                       <div 
                         key={card.id}
@@ -662,8 +1157,11 @@
                           borderColor: isActive ? 'var(--Primary)' : 'var(--Card-Border)',
                           color: isActive ? 'var(--Text)' : 'var(--Text-Muted)'
                         }}
-                        className="p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-200 hover:border-[var(--Primary)]"
+                        className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-all duration-200 hover:border-[var(--Primary)] relative ${isNewFromStream ? 'ai-card-enter ai-writing' : ''}`}
                       >
+                        {/* Shimmer overlay for newly streamed cards */}
+                        {isNewFromStream && <div className="ai-shimmer-overlay" />}
+                        
                         <div className="flex items-center gap-3 overflow-hidden">
                           <span className="text-xs bg-slate-800 text-[var(--Text-Muted)] font-mono px-1.5 py-0.5 rounded">
                             {index + 1}
@@ -674,7 +1172,7 @@
                               {card.cardType === 'cover' && (
                                 <span className="text-[10px] bg-blue-500/20 text-blue-300 px-1.5 py-0.2 rounded border border-blue-500/30 font-normal">封面</span>
                               )}
-                              {card.title || '無標題'}
+                              <span className={isNewFromStream ? 'ai-typing-cursor' : ''}>{card.title || '無標題'}</span>
                             </p>
                             <p className="text-xs text-[var(--Text-Muted)] truncate">{card.content || '無內容'}</p>
                           </div>
@@ -698,6 +1196,24 @@
                       </div>
                     );
                   })}
+                  
+                  {/* Ghost card: show what's currently being written */}
+                  {isAiGenerating && activeStreamIndex >= 0 && (
+                    <div className="p-3 rounded-xl border border-dashed border-[var(--Primary)] bg-[var(--Primary-10)] flex items-center gap-3 ai-stream-progress relative">
+                      <span className="text-xs bg-[var(--Primary-30)] text-[var(--Primary)] font-mono px-1.5 py-0.5 rounded">
+                        <span className="ai-sparkle">✦</span>
+                      </span>
+                      <div className="overflow-hidden flex-1">
+                        <p className="font-bold text-sm text-[var(--Primary)] flex items-center gap-1.5">
+                          <span className="material-symbols-outlined" style={{fontSize: '14px'}}>edit_note</span>
+                          正在撰寫第 {streamingCards.length + 1} 張卡片...
+                        </p>
+                        <p className="text-[11px] text-[var(--Text-Muted)] truncate ai-typing-cursor">
+                          AI 正在串流生成中
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -812,8 +1328,10 @@
                   style={{ backgroundColor: bgColor }}
                   className={`relative shadow-2xl overflow-hidden rounded-lg flex flex-col transition-all duration-300 select-none ${
                     aspectRatio === '4-5' ? 'w-[360px] h-[450px]' : 'w-[360px] h-[360px]'
-                  }`}
+                  } ${activeCard._isNew ? 'ai-writing' : ''}`}
                 >
+                  {/* AI streaming shimmer on preview */}
+                  {activeCard._isNew && <div className="ai-shimmer-overlay rounded-lg" />}
                   {activeCard.cardType === 'cover' ? (
                     <>
                       {/* 封面背景圖 */}
@@ -845,7 +1363,7 @@
                   ) : (
                     <>
                       {/* 上半部圖片 */}
-                      <div className="h-[50%] w-full overflow-hidden relative bg-slate-800">
+                      <div className="h-[40%] w-full overflow-hidden relative bg-slate-800">
                         {activeCard.image ? (
                           <img 
                             src={activeCard.image} 
@@ -872,14 +1390,14 @@
                       </div>
                       
                       {/* 下半部文字 */}
-                      <div className="h-[50%] p-6 flex flex-col justify-start relative box-border">
+                      <div className="h-[60%] pt-6 px-6 pb-14 flex flex-col justify-start relative box-border">
                         {/* 標題 (襯線體) */}
-                        <h1 className="text-white font-serif-tc text-2xl font-black mb-3 leading-snug tracking-wide line-clamp-2">
+                        <h1 className="text-white font-serif-tc text-2xl font-black mb-3 leading-snug tracking-wide line-clamp-2 flex-shrink-0">
                           {activeCard.title || '請輸入標題'}
                         </h1>
                         
                         {/* 內文 (無襯線體) */}
-                        <p className="text-slate-100/90 font-light text-xs leading-relaxed text-justify line-clamp-6">
+                        <p className="text-slate-100/90 font-light text-xs leading-relaxed text-justify line-clamp-6 flex-shrink-0">
                           {activeCard.content || '請在左側輸入內文...'}
                         </p>
                       </div>
