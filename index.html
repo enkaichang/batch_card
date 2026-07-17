@@ -520,7 +520,8 @@
 1. 第一張卡片必須是 "cardType": "cover"，作為封面。
 2. 其餘卡片為 "cardType": "content"。
 3. 總卡片數量限制在使用者指定的數量範圍內。
-4. 內容與標題必須使用「繁體中文（台灣）」，語氣親切流暢、條理清晰。`,
+4. 內容與標題必須使用「繁體中文（台灣）」，語氣親切流暢、條理清晰。
+5. 內容字數限制為150個中文字以內，建議在120~150字之間。`,
               temperature: 0.7
             }
           });
@@ -1360,7 +1361,7 @@
                   ) : (
                     <>
                       {/* 上半部圖片 */}
-                      <div className="h-[40%] w-full overflow-hidden relative bg-slate-800">
+                      <div className="h-[45%] w-full overflow-hidden relative bg-slate-800">
                         {activeCard.image ? (
                           <img 
                             src={activeCard.image} 
@@ -1387,7 +1388,7 @@
                       </div>
                       
                       {/* 下半部文字 */}
-                      <div className="h-[60%] pt-6 px-6 pb-14 flex flex-col justify-start relative box-border">
+                      <div className="h-[55%] pt-6 px-6 pb-14 flex flex-col justify-start relative box-border">
                         {/* 標題 (襯線體) */}
                         <h1 className="text-white font-serif-tc text-2xl font-black mb-3 leading-snug tracking-wide line-clamp-2 flex-shrink-0">
                           {activeCard.title || '請輸入標題'}
