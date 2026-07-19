@@ -26,7 +26,7 @@ https://enkaichang.github.io/batch_card/
 | :--- | :--- | :--- | :--- |
 | `article` <br>或 `text` | `string` | *(無)* | **文章內容**：要生成社群卡片的文章本文。必須進行 URL 編碼 (URL Encoded)。 |
 | `auto` <br>或 `auto_generate` <br>或 `autogen` | `string` | `"false"` | **自動生成開關**：設為 `"true"` 或 `"1"` 時，若已儲存 API 金鑰，會在網頁載入後**自動開始 AI 生成卡片**。 |
-| `count` <br>或 `targetCount` | `number` | `5` | **預估卡片張數**：限制生成的卡片數量，有效範圍為 `1` 至 `20` 張。 |
+| `count` <br>或 `targetCount` <br>或 `cardCount` <br>或 `card_count` | `number` | `5` | **預估卡片張數**：限制生成的卡片數量，有效範圍為 `1` 至 `10` 張。 |
 | `model` | `string` | `"gemini-3.5-flash"` | **指定 Gemini 模型**：例如 `gemini-3.5-flash`、`gemini-2.5-flash`、`gemini-3.1-flash-lite`。若傳入非預設模型，會自動切換為「自訂模型名稱」。 |
 | `apiKey` <br>或 `api_key` | `string` | *(讀取本地儲存)* | **Gemini API 金鑰**：臨時覆蓋並儲存使用者的 API 金鑰 (以 `AIzaSy` 開頭的字串)。 |
 | `mode` <br>或 `genMode` | `string` | `"replace"` | **生成模式**：<br>- `replace`：覆蓋並清空現有卡片。<br>- `append`：將生成的新卡片追加到現有卡片後方。 |

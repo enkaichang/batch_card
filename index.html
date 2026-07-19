@@ -346,26 +346,31 @@
           setArticleText(articleParam);
 
           // 處理可選的卡片數量設定
-          const countParam = getParam('count') || getParam('targetCount');
+          let effectiveCount = targetCount;
+          const countParam = getParam('count') || getParam('targetCount') || getParam('cardCount') || getParam('card_count') || getParam('cards') || getParam('num');
           if (countParam) {
-            const parsedCount = parseInt(countParam);
-            if (parsedCount > 0 && parsedCount <= 20) {
-              setTargetCount(parsedCount);
+            const parsedCount = parseInt(countParam, 10);
+            if (!isNaN(parsedCount) && parsedCount > 0) {
+              effectiveCount = Math.min(10, Math.max(1, parsedCount));
+              setTargetCount(effectiveCount);
             }
           }
 
           // 處理可選的模型設定
+          let activeModel = selectedModel;
           const modelParam = getParam('model');
           if (modelParam) {
             const standardModels = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
             if (standardModels.includes(modelParam)) {
               setSelectedModel(modelParam);
               localStorage.setItem('gemini_model', modelParam);
+              activeModel = modelParam;
             } else {
               setSelectedModel('custom');
               setCustomModel(modelParam);
               localStorage.setItem('gemini_model', 'custom');
               localStorage.setItem('gemini_custom_model', modelParam);
+              activeModel = modelParam;
             }
           }
 
@@ -395,9 +400,14 @@
 
           if (shouldAutogen) {
             if (activeKey.trim()) {
-              // 延遲以確保 React 狀態就緒，並觸發生成
+              // 延遲以確保 React 狀態就緒，並傳入解析後的參數避免閉包舊值問題
               setTimeout(() => {
-                handleAiGenerate(articleParam);
+                handleAiGenerate(articleParam, {
+                  count: effectiveCount,
+                  apiKey: activeKey,
+                  model: activeModel,
+                  genMode: genModeParam || 'replace'
+                });
               }, 150);
             } else {
               alert('已成功匯入文章！由於尚未設定 Gemini API Key，請先於設定區輸入密鑰以開始生成卡片。');
@@ -586,9 +596,20 @@
       };
 
       // 呼叫 Gemini API 智慧生成卡片 (Streaming)
-      const handleAiGenerate = async (customText) => {
+      const handleAiGenerate = async (customText, overrideOptions = {}) => {
         const textToUse = (typeof customText === 'string') ? customText : articleText;
-        if (!apiKey.trim()) {
+        const countToUse = (typeof overrideOptions.count === 'number' && overrideOptions.count > 0)
+          ? overrideOptions.count
+          : targetCount;
+        const keyToUse = (typeof overrideOptions.apiKey === 'string' && overrideOptions.apiKey.trim())
+          ? overrideOptions.apiKey.trim()
+          : apiKey.trim();
+        const modelToUse = overrideOptions.model
+          ? overrideOptions.model
+          : (selectedModel === 'custom' ? customModel.trim() : selectedModel);
+        const modeToUse = overrideOptions.genMode || genMode;
+
+        if (!keyToUse) {
           alert('請先輸入並儲存您的 Gemini API Key！');
           return;
         }
@@ -603,7 +624,7 @@
         setActiveStreamIndex(-1);
 
         // If replace mode, clear existing cards immediately
-        if (genMode === 'replace') {
+        if (modeToUse === 'replace') {
           setCards([]);
           setActiveCardId('');
         }
@@ -624,8 +645,7 @@
             }
           }
 
-          const ai = new window.GoogleGenAI({ apiKey: apiKey.trim() });
-          const modelToUse = selectedModel === 'custom' ? customModel.trim() : selectedModel;
+          const ai = new window.GoogleGenAI({ apiKey: keyToUse });
           if (!modelToUse) {
             throw new Error('請指定要使用的模型名稱！');
           }
@@ -633,7 +653,7 @@
           // Use streaming API — single request, counts as 1 RPD
           const stream = await ai.models.generateContentStream({
             model: modelToUse,
-            contents: `請幫我將以下文章整理成 ${targetCount} 張卡片：\n\n${textToUse}`,
+            contents: `請幫我將以下文章整理成 ${countToUse} 張卡片：\n\n${textToUse}`,
             config: {
               responseMimeType: 'application/json',
               responseSchema: {
@@ -1497,9 +1517,9 @@
                       <input 
                         type="number"
                         min="1"
-                        max="20"
+                        max="10"
                         value={targetCount}
-                        onChange={(e) => setTargetCount(parseInt(e.target.value) || 5)}
+                        onChange={(e) => setTargetCount(Math.min(10, Math.max(1, parseInt(e.target.value) || 5)))}
                         className="form-input form-input-sm"
                       />
                     </div>
