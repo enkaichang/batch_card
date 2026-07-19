@@ -343,8 +343,7 @@
         const articleParam = getParam('article') || getParam('text');
         
         if (articleParam) {
-          const decodedArticle = decodeURIComponent(articleParam);
-          setArticleText(decodedArticle);
+          setArticleText(articleParam);
 
           // 處理可選的卡片數量設定
           const countParam = getParam('count') || getParam('targetCount');
