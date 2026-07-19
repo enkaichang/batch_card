@@ -326,15 +326,28 @@
 
       // 解析 URL 傳遞過來的跳轉參數（文章內容及其他選填設定）
       useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const articleParam = params.get('article') || params.get('text');
+        // 從 query string 或 hash fragment 解析參數
+        const searchParams = new URLSearchParams(window.location.search);
+        
+        let hashString = window.location.hash || '';
+        if (hashString.startsWith('#?')) {
+          hashString = hashString.substring(2);
+        } else if (hashString.startsWith('#')) {
+          hashString = hashString.substring(1);
+        }
+        const hashParams = new URLSearchParams(hashString);
+
+        // 合併參數，優先讀取 hash 參數以解決長文章 URI Too Long 限制
+        const getParam = (key) => hashParams.get(key) || searchParams.get(key);
+
+        const articleParam = getParam('article') || getParam('text');
         
         if (articleParam) {
           const decodedArticle = decodeURIComponent(articleParam);
           setArticleText(decodedArticle);
 
           // 處理可選的卡片數量設定
-          const countParam = params.get('count') || params.get('targetCount');
+          const countParam = getParam('count') || getParam('targetCount');
           if (countParam) {
             const parsedCount = parseInt(countParam);
             if (parsedCount > 0 && parsedCount <= 20) {
@@ -343,7 +356,7 @@
           }
 
           // 處理可選的模型設定
-          const modelParam = params.get('model');
+          const modelParam = getParam('model');
           if (modelParam) {
             const standardModels = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
             if (standardModels.includes(modelParam)) {
@@ -358,27 +371,27 @@
           }
 
           // 處理可選的 API Key 設定
-          const apiKeyParam = params.get('apiKey') || params.get('api_key');
+          const apiKeyParam = getParam('apiKey') || getParam('api_key');
           if (apiKeyParam) {
             setApiKey(apiKeyParam);
             localStorage.setItem('gemini_api_key', apiKeyParam);
           }
 
           // 處理可選的生成模式設定
-          const genModeParam = params.get('genMode') || params.get('mode');
+          const genModeParam = getParam('genMode') || getParam('mode');
           if (genModeParam && (genModeParam === 'replace' || genModeParam === 'append')) {
             setGenMode(genModeParam);
           }
 
-          // 清理 URL 查詢參數，避免重新整理時重複觸發
-          const newUrl = window.location.pathname + window.location.hash;
+          // 清理 URL 查詢參數與 hash，避免重新整理時重複觸發
+          const newUrl = window.location.pathname;
           window.history.replaceState({}, document.title, newUrl);
 
           // 取得最終有效的 API Key（傳入的或原本已儲存的）
           const activeKey = apiKeyParam || localStorage.getItem('gemini_api_key') || '';
 
           // 檢查是否需要自動生成
-          const autogenParam = params.get('auto') || params.get('auto_generate') || params.get('autogen');
+          const autogenParam = getParam('auto') || getParam('auto_generate') || getParam('autogen');
           const shouldAutogen = autogenParam === 'true' || autogenParam === '1';
 
           if (shouldAutogen) {
