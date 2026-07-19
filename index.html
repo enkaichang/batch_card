@@ -397,7 +397,7 @@
             if (activeKey.trim()) {
               // 延遲以確保 React 狀態就緒，並觸發生成
               setTimeout(() => {
-                handleAiGenerate(decodedArticle);
+                handleAiGenerate(articleParam);
               }, 150);
             } else {
               alert('已成功匯入文章！由於尚未設定 Gemini API Key，請先於設定區輸入密鑰以開始生成卡片。');
