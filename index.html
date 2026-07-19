@@ -303,7 +303,7 @@
       // Gemini API states
       const [apiKey, setApiKey] = useState(() => localStorage.getItem('gemini_api_key') || '');
       const [apiEndpoint, setApiEndpoint] = useState(() => localStorage.getItem('gemini_api_endpoint') || '');
-      const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-2.5-flash');
+      const [selectedModel, setSelectedModel] = useState(() => localStorage.getItem('gemini_model') || 'gemini-3.5-flash');
       const [customModel, setCustomModel] = useState(() => localStorage.getItem('gemini_custom_model') || '');
       const [targetCount, setTargetCount] = useState(5);
       const [genMode, setGenMode] = useState('replace'); // 'replace' or 'append'
@@ -323,6 +323,79 @@
       const [unsplashResults, setUnsplashResults] = useState([]);
       const [unsplashQuery, setUnsplashQuery] = useState('');
       const [isSearchingUnsplash, setIsSearchingUnsplash] = useState(false);
+
+      // 解析 URL 傳遞過來的跳轉參數（文章內容及其他選填設定）
+      useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const articleParam = params.get('article') || params.get('text');
+        
+        if (articleParam) {
+          const decodedArticle = decodeURIComponent(articleParam);
+          setArticleText(decodedArticle);
+
+          // 處理可選的卡片數量設定
+          const countParam = params.get('count') || params.get('targetCount');
+          if (countParam) {
+            const parsedCount = parseInt(countParam);
+            if (parsedCount > 0 && parsedCount <= 20) {
+              setTargetCount(parsedCount);
+            }
+          }
+
+          // 處理可選的模型設定
+          const modelParam = params.get('model');
+          if (modelParam) {
+            const standardModels = ['gemini-3.5-flash', 'gemini-2.5-flash', 'gemini-3.1-flash-lite'];
+            if (standardModels.includes(modelParam)) {
+              setSelectedModel(modelParam);
+              localStorage.setItem('gemini_model', modelParam);
+            } else {
+              setSelectedModel('custom');
+              setCustomModel(modelParam);
+              localStorage.setItem('gemini_model', 'custom');
+              localStorage.setItem('gemini_custom_model', modelParam);
+            }
+          }
+
+          // 處理可選的 API Key 設定
+          const apiKeyParam = params.get('apiKey') || params.get('api_key');
+          if (apiKeyParam) {
+            setApiKey(apiKeyParam);
+            localStorage.setItem('gemini_api_key', apiKeyParam);
+          }
+
+          // 處理可選的生成模式設定
+          const genModeParam = params.get('genMode') || params.get('mode');
+          if (genModeParam && (genModeParam === 'replace' || genModeParam === 'append')) {
+            setGenMode(genModeParam);
+          }
+
+          // 清理 URL 查詢參數，避免重新整理時重複觸發
+          const newUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, newUrl);
+
+          // 取得最終有效的 API Key（傳入的或原本已儲存的）
+          const activeKey = apiKeyParam || localStorage.getItem('gemini_api_key') || '';
+
+          // 檢查是否需要自動生成
+          const autogenParam = params.get('auto') || params.get('auto_generate') || params.get('autogen');
+          const shouldAutogen = autogenParam === 'true' || autogenParam === '1';
+
+          if (shouldAutogen) {
+            if (activeKey.trim()) {
+              // 延遲以確保 React 狀態就緒，並觸發生成
+              setTimeout(() => {
+                handleAiGenerate(decodedArticle);
+              }, 150);
+            } else {
+              alert('已成功匯入文章！由於尚未設定 Gemini API Key，請先於設定區輸入密鑰以開始生成卡片。');
+              setShowApiSettings(true);
+            }
+          } else {
+            alert('已成功從外部網頁匯入文章內容！您可以調整設定後點選「開始 AI 智慧生成」。');
+          }
+        }
+      }, []);
 
       const activeCard = cards.find(c => c.id === activeCardId) || cards[0] || {};
 
@@ -501,12 +574,13 @@
       };
 
       // 呼叫 Gemini API 智慧生成卡片 (Streaming)
-      const handleAiGenerate = async () => {
+      const handleAiGenerate = async (customText) => {
+        const textToUse = (typeof customText === 'string') ? customText : articleText;
         if (!apiKey.trim()) {
           alert('請先輸入並儲存您的 Gemini API Key！');
           return;
         }
-        if (!articleText.trim()) {
+        if (!textToUse.trim()) {
           alert('請先輸入文章內容再進行生成！');
           return;
         }
@@ -547,7 +621,7 @@
           // Use streaming API — single request, counts as 1 RPD
           const stream = await ai.models.generateContentStream({
             model: modelToUse,
-            contents: `請幫我將以下文章整理成 ${targetCount} 張卡片：\n\n${articleText}`,
+            contents: `請幫我將以下文章整理成 ${targetCount} 張卡片：\n\n${textToUse}`,
             config: {
               responseMimeType: 'application/json',
               responseSchema: {
@@ -791,7 +865,7 @@
                   line-height: 1.6;
                   font-weight: 300;
                   margin: 0;
-                  text-align: justify;
+                  text-align: left;
                   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
                 ">${cardData.content}</p>
                 ` : ''}
@@ -902,7 +976,7 @@
                   font-size: 28px; 
                   line-height: 1.65;
                   font-weight: 300;
-                  text-align: justify;
+                  text-align: left;
                 ">${cardData.content}</p>
               </div>
 
@@ -1032,6 +1106,179 @@
         URL.revokeObjectURL(url);
 
         setIsGenerating(false);
+      };
+
+      // CSV 解析器 (支援引號與雙引號轉義、逗號及換行)
+      const parseCSV = (text) => {
+        const lines = [];
+        let row = [""];
+        let inQuotes = false;
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          const nextChar = text[i + 1];
+          if (char === '"') {
+            if (inQuotes && nextChar === '"') {
+              row[row.length - 1] += '"';
+              i++; // 跳過下一個雙引號
+            } else {
+              inQuotes = !inQuotes;
+            }
+          } else if (char === ',' && !inQuotes) {
+            row.push("");
+          } else if ((char === '\r' || char === '\n') && !inQuotes) {
+            if (char === '\r' && nextChar === '\n') {
+              i++; // 跳過 \n
+            }
+            lines.push(row);
+            row = [""];
+          } else {
+            row[row.length - 1] += char;
+          }
+        }
+        if (row.length > 1 || row[0] !== "") {
+          lines.push(row);
+        }
+        return lines;
+      };
+
+      // 導出 CSV (儲存編輯狀態與卡片資料)
+      const handleExportCSV = () => {
+        try {
+          const headers = ['卡片類型', '標題', '內容', '圖片網址', '圖片名稱', '背景顏色', '圖片比例'];
+          const csvRows = [headers.join(',')];
+          
+          cards.forEach((card) => {
+            const row = [
+              card.cardType || 'content',
+              card.title || '',
+              card.content || '',
+              card.image || '',
+              card.imageName || '',
+              bgColor || '',
+              aspectRatio || ''
+            ].map(val => {
+              const escaped = val.toString().replace(/"/g, '""');
+              return `"${escaped}"`;
+            });
+            csvRows.push(row.join(','));
+          });
+          
+          // 新增 UTF-8 BOM 確保 Excel 開啟時中文不亂碼
+          const csvContent = "\uFEFF" + csvRows.join('\r\n');
+          const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.download = `BatchCard_編輯狀態_${Date.now()}.csv`;
+          link.href = url;
+          link.click();
+          URL.revokeObjectURL(url);
+        } catch (err) {
+          console.error(err);
+          window.alert('導出 CSV 失敗: ' + err.message);
+        }
+      };
+
+      // 導入 CSV (載入編輯狀態與卡片資料)
+      const handleImportCSV = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!window.confirm('導入 CSV 將會覆蓋目前所有的卡片與設定，是否確定？')) {
+          e.target.value = ''; // 重設 file input
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          try {
+            const text = event.target.result;
+            const parsedLines = parseCSV(text);
+            if (parsedLines.length < 2) {
+              window.alert('CSV 檔案格式不正確或無資料！');
+              return;
+            }
+
+            const headers = parsedLines[0].map(h => h.trim().toLowerCase());
+            
+            // 對應欄位索引（支援中英文）
+            const getIndex = (keys) => {
+              return headers.findIndex(h => keys.some(k => h.includes(k.toLowerCase())));
+            };
+
+            const cardTypeIdx = getIndex(['card type', 'cardtype', '卡片類型', '類型']);
+            const titleIdx = getIndex(['title', '標題']);
+            const contentIdx = getIndex(['content', '內容', '內文', '摘要']);
+            const imageIdx = getIndex(['image', '圖片網址', '圖片', '配圖']);
+            const imageNameIdx = getIndex(['image name', 'image_name', '圖片名稱', '名稱']);
+            const bgColorIdx = getIndex(['background color', 'bgcolor', '背景顏色', '顏色']);
+            const aspectRatioIdx = getIndex(['aspect ratio', 'aspectratio', '圖片比例', '比例']);
+
+            const getColVal = (row, idx) => {
+              if (idx === -1 || idx >= row.length) return '';
+              return row[idx] || '';
+            };
+
+            if (titleIdx === -1 || contentIdx === -1) {
+              window.alert('CSV 欄位解析失敗！必須包含「標題」與「內容」欄位。');
+              return;
+            }
+
+            const importedCards = [];
+            const baseTimestamp = Date.now();
+
+            for (let i = 1; i < parsedLines.length; i++) {
+              const row = parsedLines[i];
+              if (row.length === 1 && row[0] === '') continue; // 跳過空行
+
+              const title = getColVal(row, titleIdx);
+              const content = getColVal(row, contentIdx);
+              
+              if (!title && !content) continue; // 標題和內容皆空則跳過
+
+              const cardTypeRaw = getColVal(row, cardTypeIdx).trim().toLowerCase();
+              const cardType = (cardTypeRaw === 'cover') ? 'cover' : 'content';
+              const image = getColVal(row, imageIdx) || 'https://images.unsplash.com/photo-1507842229512-238dd25936ce?auto=format&fit=crop&w=800&q=80';
+              const imageName = getColVal(row, imageNameIdx) || '預設書本圖';
+
+              importedCards.push({
+                id: (baseTimestamp + i).toString(),
+                title,
+                content,
+                image,
+                imageName,
+                cardType
+              });
+            }
+
+            if (importedCards.length === 0) {
+              window.alert('未從 CSV 檔案中讀取到任何有效卡片！');
+              return;
+            }
+
+            // 如果 CSV 裡有保存全局設定，則還原設定
+            const firstDataRow = parsedLines[1];
+            if (firstDataRow) {
+              const csvBgColor = getColVal(firstDataRow, bgColorIdx).trim();
+              if (csvBgColor && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(csvBgColor)) {
+                setBgColor(csvBgColor);
+              }
+              const csvAspectRatio = getColVal(firstDataRow, aspectRatioIdx).trim();
+              if (csvAspectRatio === '4-5' || csvAspectRatio === '1-1') {
+                setAspectRatio(csvAspectRatio);
+              }
+            }
+
+            setCards(importedCards);
+            setActiveCardId(importedCards[0].id);
+            window.alert(`已成功導入 ${importedCards.length} 張卡片！`);
+          } catch (err) {
+            console.error(err);
+            window.alert('導入 CSV 失敗: ' + err.message);
+          } finally {
+            e.target.value = ''; // 重設 file input
+          }
+        };
+        reader.readAsText(file, 'UTF-8');
       };
 
       return (
@@ -1226,7 +1473,7 @@
                           setCustomModel(e.target.value);
                           localStorage.setItem('gemini_custom_model', e.target.value);
                         }}
-                        placeholder="例如: gemini-2.5-flash"
+                        placeholder="例如: gemini-3.5-flash"
                         className="form-input form-input-sm mt-2"
                       />
                     )}
@@ -1336,6 +1583,29 @@
                     >
                       <span className="material-symbols-outlined" style={{fontSize: '14px'}}>auto_stories</span> 封面
                     </button>
+                  </div>
+                </div>
+
+                {/* CSV 備份與導入/導出功能列 */}
+                <div className="flex justify-between items-center gap-2 mb-3 pb-2 border-b border-dashed border-[var(--Card-Border)]">
+                  <span className="text-[11px] text-[var(--Text-Muted)] font-medium flex items-center gap-1 select-none">
+                    <span className="material-symbols-outlined" style={{fontSize: '14px'}}>backup</span>
+                    CSV 編輯狀態備份：
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportCSV}
+                      className="btn btn-secondary btn-sm py-1 px-3 flex items-center gap-1 text-slate-300 border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-normal"
+                    >
+                      <span className="material-symbols-outlined" style={{fontSize: '14px'}}>download</span>
+                      導出 CSV
+                    </button>
+                    <label className="btn btn-secondary btn-sm py-1 px-3 flex items-center gap-1 text-slate-300 border-slate-700 bg-slate-800 hover:bg-slate-700 text-xs font-normal cursor-pointer mb-0">
+                      <span className="material-symbols-outlined" style={{fontSize: '14px'}}>upload</span>
+                      導入 CSV
+                      <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
+                    </label>
                   </div>
                 </div>
 
@@ -1618,7 +1888,7 @@
                           {activeCard.title || '請輸入標題'}
                         </h1>
                         {activeCard.content && (
-                          <p className="text-slate-200/90 font-light text-[11px] leading-relaxed text-justify line-clamp-3" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.6)' }}>
+                          <p className="text-slate-200/90 font-light text-[11px] leading-relaxed text-left line-clamp-3" style={{ textShadow: '0 1px 4px rgba(0, 0, 0, 0.6)' }}>
                             {activeCard.content}
                           </p>
                         )}
@@ -1661,7 +1931,7 @@
                         </h1>
                         
                         {/* 內文 (無襯線體) */}
-                        <p className="text-slate-100/90 font-light text-xs leading-relaxed text-justify line-clamp-6 flex-shrink-0">
+                        <p className="text-slate-100/90 font-light text-xs leading-relaxed text-left line-clamp-6 flex-shrink-0">
                           {activeCard.content || '請在左側輸入內文...'}
                         </p>
                       </div>
